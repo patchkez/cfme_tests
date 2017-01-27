@@ -8,10 +8,10 @@ from utils.blockers import BZ
 
 
 pytest_generate_tests = generate(config_managers)
-pytestmark = [pytest.mark.uncollectif(lambda config_manager_obj:
-                                      config_manager_obj.type == "Ansible Tower"and
-                                      version.current_version() > "5.6"),
-              pytest.mark.meta(blockers=[BZ(1393987)])]
+# pytestmark = [pytest.mark.uncollectif(lambda config_manager_obj:
+#                                      config_manager_obj.type == "Ansible Tower"and
+#                                      version.current_version() > "5.6"),
+#              pytest.mark.meta(blockers=[BZ(1393987)])]
 
 
 @pytest.yield_fixture
@@ -88,7 +88,8 @@ def test_config_manager_add_invalid_url(request, config_manager_obj):
 def test_config_manager_add_invalid_creds(request, config_manager_obj):
     request.addfinalizer(config_manager_obj.delete)
     config_manager_obj.credentials.principal = 'invalid_user'
-    with error.expected('Invalid username/password'):
+    # with error.expected('Invalid username/password'):
+    with error.expected('Credential validation was not successful: Invalid username/password'):
         config_manager_obj.create()
 
 
@@ -137,3 +138,18 @@ def test_config_system_tag(request, config_system, tag):
 # def test_config_system_reprovision(config_system):
 #    # TODO specify machine per stream in yamls or use mutex (by tagging/renaming)
 #    pass
+
+def test_config_manager_prov_from_button(request, config_manager_obj, cloud_obj):
+    """Test if Ansible playbook can be executed via custom button on provisioned cloud instance.
+
+    Prerequisities:
+        * This test is not depending on any other test and can be executed against fresh appliance.
+
+    Steps:
+        * Add Ansible Tower provider
+        * Create service dialog from Job template
+        * Add new button into "VM and Instance" buttons group (Automate -> Customization)
+        * Add Cloud provider
+        * Provision new cloud instance
+        * Use new created button on new instance
+    """
