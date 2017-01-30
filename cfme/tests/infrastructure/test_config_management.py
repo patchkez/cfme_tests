@@ -148,8 +148,13 @@ def test_config_manager_prov_from_button(request, config_manager_obj, cloud_obj)
     Steps:
         * Add Ansible Tower provider
         * Create service dialog from Job template
-        * Add new button into "VM and Instance" buttons group (Automate -> Customization)
+        * Add new group button into "VM and Instance" (Automate -> Customization)
+        * Add new group button into button group
         * Add Cloud provider
         * Provision new cloud instance
-        * Use new created button on new instance
+        * Use new created button on new instance and execute playbook
     """
+
+    # Add Ansible Tower provider
+    request.addfinalizer(config_manager_obj.delete)
+    config_manager_obj.create()

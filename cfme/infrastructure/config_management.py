@@ -44,7 +44,8 @@ def cfm_mgr_table():
 
 page = Region(locators={
     'list_table_config_profiles': cfm_mgr_table(),
-    'list_table_config_systems': cfm_mgr_table()})
+    'list_table_config_systems': cfm_mgr_table(),
+    'list_table_config_templates': cfm_mgr_table()})
 
 add_manager_btn = form_buttons.FormButton('Add')
 edit_manager_btn = form_buttons.FormButton('Save changes')
@@ -222,6 +223,9 @@ class ConfigManager(Updateable, Pretty, Navigatable):
     def _does_profile_exist(self):
         return sel.is_displayed(page.list_table_config_profiles)
 
+    def _does_template_exist(self):
+        return sel.is_displayed(page.list_table_config_templates)
+
     @property
     def config_profiles(self):
         """Returns 'ConfigProfile' configuration profiles (hostgroups) available on this manager"""
@@ -232,9 +236,23 @@ class ConfigManager(Updateable, Pretty, Navigatable):
                 page.list_table_config_profiles.rows()]
 
     @property
+    def config_templates(self):
+        """Returns 'AnsibleTowerJobTemplates' available on this manager"""
+        navigate_to(self, 'Details')
+        tb.select('List View')
+        wait_for(self._does_template_exist, num_sec=300, delay=20, fail_func=sel.refresh)
+        return [AnsibleTowerJobTemplates(row['name'].text, self) for row in
+                page.list_table_config_templates.rows()]
+
+    @property
     def systems(self):
         """Returns 'ConfigSystem' configured systems (hosts) available on this manager"""
         return reduce(lambda x, y: x + y, [prof.systems for prof in self.config_profiles])
+
+    @property
+    def templates(self):
+        """Returns 'AnsibleTowerJobTemplates' available on this manager"""
+        return reduce(lambda x, y: x + y, [prof.templates for prof in self.config_templates])
 
     @property
     def yaml_data(self):
@@ -313,6 +331,39 @@ class ConfigProfile(Pretty):
         return list()
 
 
+class AnsibleTowerJobTemplates(Pretty):
+    """ Ansible Tower Job Template object
+
+    Args:
+        name: Name of the template
+        manager: ConfigManager object
+    """
+    pretty_attrs = ['name', 'manager']
+
+    def __init__(self, name, manager):
+        self.name = name
+        self.manager = manager
+
+    @property
+    def template(self):
+        """Returns 'JobTemplate' objects that are active under this profile"""
+        navigate_to(self, 'Details')
+        # ajax wait doesn't work here
+        _title_loc = "//span[contains(@id, 'explorer_title_text') " \
+                     "and contains(normalize-space(text()), 'Ansible Tower Job Teamplates')]"
+        sel.wait_for_element(_title_loc)
+
+        # Unassigned config profile has no tabstrip
+        if "unassigned" not in self.name.lower():
+            tabs.select_tab("Ansible Tower Job Templates")
+
+        if sel.is_displayed(page.list_table_config_templates):
+            row_key = 'Name'
+            return [JobTemplate(row[row_key].text, self) for row in
+                    page.list_table_config_templates.rows()]
+        return list()
+
+
 class ConfigSystem(Pretty):
 
     pretty_attrs = ['name', 'manager_key']
@@ -338,6 +389,16 @@ class ConfigSystem(Pretty):
         """Returns a list of this system's active tags"""
         navigate_to(self, 'EditTags')
         return mixins.get_tags()
+
+
+class JobTemplate(Pretty):
+
+    pretty_attrs = ['name', 'manager_key']
+
+    def __init__(self, name, profile):
+        self.name = name
+        self.profile = profile
+    pass
 
 
 class Satellite(ConfigManager):
@@ -536,3 +597,37 @@ class SysEditTags(CFMENavigateStep):
     def step(self):
         sel.check(Quadicon(self.obj.name, None))
         cfg_btn('Edit Tags')
+
+
+@navigator.register(JobTemplate, 'All')
+class TempAll(CFMENavigateStep):
+    prerequisite = NavigateToAttribute('appliance.server', 'LoggedIn')
+
+    def step(self):
+        from cfme.web_ui.menu import nav
+        nav._nav_to_fn('Configuration', 'Management')(None)
+
+    def resetter(self):
+        accordion.tree('Ansible Tower Job Templates', 'All Ansible Tower Job Templates')
+        tb.select('Grid View')
+
+    def am_i_here(self):
+        return match_page(summary='All Ansible Tower Job Templates')
+
+
+@navigator.register(JobTemplate, 'EditTags')
+class TempEditTags(CFMENavigateStep):
+    prerequisite = NavigateToSibling('All')
+
+    def step(self):
+        sel.check(Quadicon(self.obj.name, None))
+        cfg_btn('Edit Tags')
+
+
+@navigator.register(JobTemplate, 'CreateDialog')
+class TempCreateDialog(CFMENavigateStep):
+    prerequisite = NavigateToSibling('All')
+
+    def step(self):
+        sel.click(Quadicon(self.obj.quad_name, None))
+        cfg_btn('Create Service Dialog from this Job Template')
